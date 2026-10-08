@@ -9,18 +9,24 @@ class DivergenceMetrics:
         m_train: torch.Tensor,
         m_live: torch.Tensor,
         bandwidth: Optional[float] = None,
+        max_samples: int = 5000  # <--- OOM Safeguard
     ) -> Dict[str, float]:
         """
         Computes multivariate Jensen-Shannon Divergence D_JS(P_train || Q_live)
         over rolling-window moment vectors M_t in R^d using Gaussian Parzen KDE.
-        
-        Args:
-            m_train: Reference moments from training bank, shape (N_p, d)
-            m_live: Observed moments from live market stream, shape (N_q, d)
         """
         # Flatten temporal and batch dimensions to treat as a set of observed states
         m_train = m_train.reshape(-1, m_train.shape[-1])
         m_live = m_live.reshape(-1, m_live.shape[-1])
+        
+        # --- OOM Prevention: Randomly subsample massive datasets ---
+        if m_train.shape[0] > max_samples:
+            idx_train = torch.randperm(m_train.shape[0], device=m_train.device)[:max_samples]
+            m_train = m_train[idx_train]
+            
+        if m_live.shape[0] > max_samples:
+            idx_live = torch.randperm(m_live.shape[0], device=m_live.device)[:max_samples]
+            m_live = m_live[idx_live]
         
         n_p, d = m_train.shape
         n_q = m_live.shape[0]
